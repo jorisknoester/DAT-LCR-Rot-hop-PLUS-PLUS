@@ -1,6 +1,6 @@
-# CD-ABSC
+# DAT-LCR-Rot-hop++
 
-Cross-Domain (CD) Aspect Based Sentiment Classification (ABSC) using LCR-Rot-hop++ with upper layer fine-tuning.
+Cross-Domain (CD) Aspect-Based Sentiment Classification (ABSC) using LCR-Rot-hop++ with Domain Adversarial Training (DAT).
 
 ## Set-up instructions.
 
