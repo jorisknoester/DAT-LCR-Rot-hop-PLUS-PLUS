@@ -35,6 +35,6 @@ This code is adapted from Trusca, Wassenberg, Frasincar and Dekker (2020).
 https://github.com/mtrusca/HAABSA_PLUS_PLUS
 
 Truşcǎ M.M., Wassenberg D., Frasincar F., Dekker R. (2020) A Hybrid Approach for Aspect-Based Sentiment Analysis Using
-Deep Contextual Word Embeddings and Hierarchical Attention. In: Bielikova M., Mikkonen T., Pautasso C. (eds) Web
-Engineering. ICWE 2020. Lecture Notes in Computer Science, vol 12128, pp. 365-380. Springer, Cham.
+Deep Contextual Word Embeddings and Hierarchical Attention. In: 20th International Conference on Web
+Engineering. (ICWE 2020). LNCS, vol 12128, pp. 365-380. Springer, Cham.
 https://doi.org/10.1007/978-3-030-50578-3_25
