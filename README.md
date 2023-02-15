@@ -16,9 +16,11 @@ Cross-Domain (CD) Aspect-Based Sentiment Classification (ABSC) using LCR-Rot-hop
 ## How to use?
 - Adjust the paths in config.py, main$\_$test.py, and main$\_$hyper.py 
 - Get raw data for your required domains by running raw$\_$data.py for restaurant, laptop, and book domain.
-- Get BERT embeddings by running generate_bert_embeddings.ipynb for your required domains *using Google Colab* to obtain BERT embeddings or download them from ... and put them in correct folder: "\getBERT\dataBERT". 
+- Get BERT embeddings by running generate_bert_embeddings.ipynb for your required domains *using Google Colab* to obtain BERT embeddings or download them from https://drive.google.com/drive/folders/10QzWzfGQnAXwdSNUp16241QHHWcKYILn?usp=sharing and put them in correct folder: "\getBERT\dataBERT". 
 - Run prepare_bert.py for your required domains.
 - Tune hyperparameters to your specific task using main_hyper.py or use hyperparameters as pre-set in main_test.py.
+- Adjust the additional settings in config.py. For instance, choosing to add neutral sentiments to positive class
+- Adjust in nn_layer.py the structure of the discriminator if wanted
 - Select tests to run and run main_test.py (running all tests will take a long time, 5-8 minutes per iteration). Make
   sure write_result is set to True if you want the results to be saved to a text file.
 
