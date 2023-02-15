@@ -12,6 +12,7 @@
 
 import numpy as np
 import tensorflow as tf
+from config import *
 
 
 def dynamic_rnn(cell, inputs, n_hidden, length, max_len, scope_name, out_type='last'):
@@ -95,50 +96,85 @@ def reduce_mean_with_len(inputs, length):
     return inputs
 
 
-def class_discriminator(inputs, n_hidden, keep_prob, l2, n_class, scope_name='1'):
+def class_discriminator(inputs, keep_prob, l2, scope_name='1', test=False):
     """
     The structure of the class discriminator
 
     :param inputs: the input vector
-    :param n_hidden: the number of hidden neurons
     :param keep_prob: keep probability
     :param l2: l2-regularisation term
-    :param n_class: number of possible sentiments (3)
+    :param test: test set or training set
     :param scope_name: string to add to weight name
     :return:
     """
-    w0 = tf.get_variable(
-        name='softmax_w0' + scope_name,
-        shape=[n_hidden, n_hidden/4],
-        initializer=tf.random_normal_initializer(mean=0., stddev=np.sqrt(2. / (n_hidden + n_class))),
-        regularizer=tf.contrib.layers.l2_regularizer(l2)
-    )
-    b0 = tf.get_variable(
-        name='softmax_b0' + scope_name,
-        shape=[n_hidden/4],
-        initializer=tf.zeros_initializer(),
-    )
-    w1 = tf.get_variable(
-        name='softmax_w1' + scope_name,
-        shape=[n_hidden/4, n_class],
-        initializer=tf.random_normal_initializer(mean=0., stddev=np.sqrt(2. / (n_hidden + n_class))),
-        regularizer=tf.contrib.layers.l2_regularizer(l2)
-    )
-    b1 = tf.get_variable(
-        name='softmax_b1' + scope_name,
-        shape=[n_class],
-        initializer=tf.zeros_initializer(),
-    )
+    hidden_output = inputs
+    n_hidden = FLAGS.n_hidden
+    weights = []
+    for layer in range(FLAGS.hidden_layers, 0, -1):
+        if layer == 1 and layer == FLAGS.hidden_layers:
+            w = tf.get_variable(
+                name='class_w' + str(layer) + scope_name,
+                shape=[2400, FLAGS.n_class],
+                initializer=tf.random_normal_initializer(mean=0., stddev=np.sqrt(2. / n_hidden)),
+                regularizer=tf.contrib.layers.l2_regularizer(l2)
+            )
+            b = tf.get_variable(
+                name='class_b' + str(layer) + scope_name,
+                shape=[FLAGS.n_class],
+                initializer=tf.zeros_initializer()
+            )
+            if not test:
+                hidden_output = tf.nn.dropout(hidden_output, keep_prob=keep_prob)
+        elif layer == 1 and layer != FLAGS.hidden_layers:
+            w = tf.get_variable(
+                name='class_w' + str(layer) + scope_name,
+                shape=[np.power(2, layer) * n_hidden, FLAGS.n_class],
+                initializer=tf.random_normal_initializer(mean=0., stddev=np.sqrt(2. / n_hidden)),
+                regularizer=tf.contrib.layers.l2_regularizer(l2)
+            )
+            b = tf.get_variable(
+                name='class_b' + str(layer) + scope_name,
+                shape=[FLAGS.n_class],
+                initializer=tf.zeros_initializer()
+            )
+            if not test:
+                hidden_output = tf.nn.dropout(hidden_output, keep_prob=keep_prob)
+        elif layer!= 1 and layer == FLAGS.hidden_layers:
+            w = tf.get_variable(
+                name='class_w' + str(layer) + scope_name,
+                shape=[2400, np.power(2, layer-1) * n_hidden],
+                initializer=tf.random_normal_initializer(mean=0., stddev=np.sqrt(2. / n_hidden)),
+                regularizer=tf.contrib.layers.l2_regularizer(l2)
+            )
+            b = tf.get_variable(
+                name='class_b' + str(layer) + scope_name,
+                shape=[np.power(2, layer-1) * n_hidden],
+                initializer=tf.zeros_initializer()
+            )
+            if not test:
+                hidden_output = tf.nn.dropout(hidden_output, keep_prob=0.8)
+        else:
+            w = tf.get_variable(
+                name='class_w' + str(layer) + scope_name,
+                shape=[np.power(2, layer) * n_hidden, np.power(2, layer-1) * n_hidden],
+                initializer=tf.random_normal_initializer(mean=0., stddev=np.sqrt(2. / n_hidden)),
+                regularizer=tf.contrib.layers.l2_regularizer(l2)
+            )
+            b = tf.get_variable(
+                name='class_b' + str(layer) + scope_name,
+                shape=[np.power(2, layer-1) * n_hidden],
+                initializer=tf.zeros_initializer()
+            )
+            if not test:
+                hidden_output = tf.nn.dropout(hidden_output, keep_prob=keep_prob)
+        hidden_output = tf.matmul(hidden_output, w) + b
+        weights.append(w)
     with tf.name_scope('softmax'):
-        hidden_output_0 = tf.nn.dropout(inputs, keep_prob=keep_prob)
-        hidden_output_0 = tf.matmul(hidden_output_0, w0) + b0
-        output = tf.nn.dropout(hidden_output_0, keep_prob=keep_prob)
-        output = tf.matmul(output, w1) + b1
-        predict = tf.nn.softmax(output)
-    return predict
+        predict = tf.nn.softmax(hidden_output)
+    return predict, weights
 
 
-def domain_discriminator(inputs, n_hidden, keep_prob, l2, n_domain, scope_name='1'):
+def domain_discriminator(inputs, keep_prob, l2, scope_name='1', test=False):
     """
     Structure of the domain discriminator
 
@@ -149,33 +185,68 @@ def domain_discriminator(inputs, n_hidden, keep_prob, l2, n_domain, scope_name='
     :param n_domain: number of possible sentiments (2)
     :param scope_name: string to add to weight name
     """
-    w0 = tf.get_variable(
-        name='dis_w0' + scope_name,
-        shape=[8 * n_hidden, 2 * n_hidden],
-        initializer=tf.random_normal_initializer(mean=0., stddev=np.sqrt(2. / (8 * n_hidden + n_domain))),
-    )
-    b0 = tf.get_variable(
-        name='dis_b0' + scope_name,
-        shape=[2 * n_hidden],
-        initializer=tf.zeros_initializer(),
-    )
-    w1 = tf.get_variable(
-        name='dis_w1' + scope_name,
-        shape=[2 * FLAGS.n_hidden, FLAGS.n_domain],
-        initializer=tf.random_normal_initializer(mean=0.,
-                                                 stddev=np.sqrt(2. / (8 * FLAGS.n_hidden + FLAGS.n_domain))),
-    )
-    b1 = tf.get_variable(
-        name='dis_b1' + scope_name,
-        shape=[FLAGS.n_domain],
-        initializer=tf.zeros_initializer(),
-    )
-    print('I am the Discriminator')
-    hidden_output_0 = tf.nn.dropout(inputs, keep_prob=keep_prob)
-    hidden_output_0 = tf.matmul(hidden_output_0, w0) + b0
-    outputs = tf.nn.dropout(hidden_output_0, keep_prob=keep_prob)
-    outputs = tf.matmul(outputs, w1) + b1
-    prob = tf.nn.softmax(outputs)
-
-    return prob, w0, w1
+    weights = []
+    hidden_output = inputs
+    n_hidden = FLAGS.n_hidden
+    for layer in range(FLAGS.hidden_layers, 0, -1):
+        if layer == 1 and layer == FLAGS.hidden_layers:
+            w = tf.get_variable(
+                name='domain_w' + str(layer) + scope_name,
+                shape=[2400, FLAGS.n_domain],
+                initializer=tf.random_normal_initializer(mean=0., stddev=np.sqrt(2. / n_hidden)),
+                regularizer=tf.contrib.layers.l2_regularizer(l2)
+            )
+            b = tf.get_variable(
+                name='domain_b' + str(layer) + scope_name,
+                shape=[FLAGS.n_domain],
+                initializer=tf.zeros_initializer()
+            )
+            if not test:
+                hidden_output = tf.nn.dropout(hidden_output, keep_prob=keep_prob)
+        elif layer == 1 and layer != FLAGS.hidden_layers:
+            w = tf.get_variable(
+                name='domain_w' + str(layer) + scope_name,
+                shape=[np.power(2, layer) * n_hidden, FLAGS.n_domain],
+                initializer=tf.random_normal_initializer(mean=0., stddev=np.sqrt(2. / n_hidden)),
+                regularizer=tf.contrib.layers.l2_regularizer(l2)
+            )
+            b = tf.get_variable(
+                name='domain_b' + str(layer) + scope_name,
+                shape=[FLAGS.n_domain],
+                initializer=tf.zeros_initializer()
+            )
+            if not test:
+                hidden_output = tf.nn.dropout(hidden_output, keep_prob=keep_prob)
+        elif layer!= 1 and layer == FLAGS.hidden_layers:
+            w = tf.get_variable(
+                name='domain_w' + str(layer) + scope_name,
+                shape=[2400, np.power(2, layer-1) * n_hidden],
+                initializer=tf.random_normal_initializer(mean=0., stddev=np.sqrt(2. / n_hidden)),
+                regularizer=tf.contrib.layers.l2_regularizer(l2)
+            )
+            b = tf.get_variable(
+                name='domain_b' + str(layer) + scope_name,
+                shape=[np.power(2, layer-1) * n_hidden],
+                initializer=tf.zeros_initializer()
+            )
+            if not test:
+                hidden_output = tf.nn.dropout(hidden_output, keep_prob=0.8)
+        else:
+            w = tf.get_variable(
+                name='domain_w' + str(layer) + scope_name,
+                shape=[np.power(2, layer) * n_hidden, np.power(2, layer-1) * n_hidden],
+                initializer=tf.random_normal_initializer(mean=0., stddev=np.sqrt(2. / n_hidden)),
+                regularizer=tf.contrib.layers.l2_regularizer(l2)
+            )
+            b = tf.get_variable(
+                name='domain_b' + str(layer) + scope_name,
+                shape=[np.power(2, layer-1) * n_hidden],
+                initializer=tf.zeros_initializer()
+            )
+            if not test:
+                hidden_output = tf.nn.dropout(hidden_output, keep_prob=keep_prob)
+        hidden_output = tf.matmul(hidden_output, w) + b
+        weights.append(w)
+    prob = tf.nn.softmax(hidden_output)
+    return prob, weights
 

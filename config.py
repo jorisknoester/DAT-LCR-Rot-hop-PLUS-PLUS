@@ -20,28 +20,37 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 FLAGS = tf.app.flags.FLAGS
+neutral_sentiment = True
 
 # Implementation settings.
 tf.app.flags.DEFINE_string("embedding_type", "BERT", "type of embedding used (BERT or glove)")
 tf.app.flags.DEFINE_integer('embedding_dim', 768, 'dimension of word embed H')
 tf.app.flags.DEFINE_integer('n_hidden', 300, 'number of hidden unit')
-tf.app.flags.DEFINE_integer('n_class', 3, 'number of distinct class')
+tf.app.flags.DEFINE_integer('n_class', 2, 'number of distinct class')
 tf.app.flags.DEFINE_integer('n_domain', 2, 'number of distinct domains')
 tf.app.flags.DEFINE_integer('max_sentence_len', 80, 'max number of tokens per sentence')
 tf.app.flags.DEFINE_integer('max_doc_len', 20, 'max number of tokens per sentence')
 tf.app.flags.DEFINE_float('random_base', 0.01, 'initial random base')
 tf.app.flags.DEFINE_integer('display_step', 4, 'number of test display step')
 tf.app.flags.DEFINE_integer('pos', 0, 'mapping for positive sentiment')
-tf.app.flags.DEFINE_integer('neu', 1, 'mapping for neutral sentiment')
-tf.app.flags.DEFINE_integer('neg', 2, 'mapping for negative sentiment')
+tf.app.flags.DEFINE_integer('neg', 1, 'mapping for negative sentiment')
 tf.app.flags.DEFINE_integer('source_domain_mapping', 0, 'mapping for source domain')
 tf.app.flags.DEFINE_integer('target_domain_mapping', 1, 'mapping for target domain')
 tf.app.flags.DEFINE_string('t1', 'last', 'type of hidden output')
 tf.app.flags.DEFINE_string('t2', 'last', 'type of hidden output')
+tf.app.flags.DEFINE_integer('hidden_layers', 1, 'number of layers in class and domain discriminator')
 tf.app.flags.DEFINE_integer('n_layer', 3, 'number of stacked rnn')
 tf.app.flags.DEFINE_string('is_r', '1', 'prob')
 tf.app.flags.DEFINE_integer('max_target_len', 19, 'max target length')
 tf.app.flags.DEFINE_integer('splits', 9, 'number of data splits for test')
+tf.app.flags.DEFINE_integer('neutral_sentiment', 0, 'Neutral sentiment in/excluded')
+tf.app.flags.DEFINE_integer('neutral_to_negative', 0, 'Neutral sentiment as part of negative class')
+tf.app.flags.DEFINE_integer('l2_regularization', 1, 'L2-regularization on or off')
+if neutral_sentiment:
+    FLAGS.neutral_sentiment = 1
+    FLAGS.n_class = 3
+    FLAGS.neg = 2
+    tf.app.flags.DEFINE_integer('neu', 1, 'mapping for neutral sentiment')
 
 # The domain settings
 tf.app.flags.DEFINE_string("source_domain", "book", "source domain (training set)")
@@ -51,7 +60,7 @@ tf.app.flags.DEFINE_integer("target_year", 2014, "year data set")
 tf.app.flags.DEFINE_integer('batch_size_src', 24, 'number of example per batch_src')
 tf.app.flags.DEFINE_integer('batch_size_tar', 15, 'number of example per batch_tar')
 tf.app.flags.DEFINE_integer('batch_size_te', 701, 'number of example in test set')
-tf.app.flags.DEFINE_integer('n_iter', 200, 'number of train iter')
+tf.app.flags.DEFINE_integer('n_iter', 20, 'number of train iter')
 
 # Hyperparameter settings
 tf.app.flags.DEFINE_float('balance_lambda', 1.0, 'lambda')
@@ -73,9 +82,6 @@ tf.app.flags.DEFINE_string("test_path", "data/programGeneratedData/BERT/" + str(
 tf.app.flags.DEFINE_string("embedding_path",
                            "data/programGeneratedData/" + str(FLAGS.embedding_dim) + "embedding" + str(
                                FLAGS.source_year) + ".txt", "pre-trained embedding vectors file path")
-tf.app.flags.DEFINE_string("remaining_test_path",
-                           "data/programGeneratedData/" + str(FLAGS.embedding_dim) + 'remainingtestdata' + str(
-                               FLAGS.target_year) + ".txt", "remaining test data path after ontology")
 
 # Cross-domain source and target embedding
 tf.app.flags.DEFINE_string("train_embedding_source",
@@ -146,7 +152,7 @@ def print_config():
     print()
 
 
-def loss_func_class_discr(y, prob):
+def loss_func_class_discr(y, prob, weights):
     """
     Calculates the loss of the class discriminator
 
@@ -154,27 +160,28 @@ def loss_func_class_discr(y, prob):
     :param prob: predicted probability
     :return: class loss
     """
-
-    reg_loss = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-    loss = - tf.reduce_mean(y * tf.log(prob)) + sum(reg_loss)
+    loss = - tf.reduce_mean(y * tf.log(prob+0.0001))
+    if FLAGS.l2_regularization == 1:
+        for w in weights:
+                loss += FLAGS.l2_f * tf.nn.l2_loss(w)
     return loss
 
 
-def loss_func_domain_discr(d, prob, w0, w1, flag):
+def loss_func_domain_discr(d, prob, weights, flag):
     """
     Calculates the loss of the domain discriminator
 
     :param d: domain label
     :param prob: predicted probability
-    :param w0: weights of first layer domain discriminator
-    :param w1: weights of second layer of domain discriminator
+    :param weights: weights of second layer of domain discriminator
     :param flag: boolean that indicates whether or not the regularisation term of the weights should be added
     :return: domain loss
     """
-    if flag:
-        loss = - tf.reduce_mean(d * tf.log(prob)) + FLAGS.l2 * (tf.nn.l2_loss(w0) + tf.nn.l2_loss(w1))
-    else:
-        loss = - tf.reduce_mean(d * tf.log(prob))
+    loss = - tf.reduce_mean(d * tf.log(prob+0.0001))
+    if FLAGS.l2_regularization == 1:
+        if flag:
+            for w in weights:
+                loss += FLAGS.l2_dis * tf.nn.l2_loss(w)
     return loss
 
 

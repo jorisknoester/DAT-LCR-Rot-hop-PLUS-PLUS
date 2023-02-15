@@ -108,12 +108,23 @@ def change_y_to_onehot(y, pos_neu_neg=True):
     from collections import Counter
     count = Counter(y)
     if FLAGS.writable == 1:
-        with open(FLAGS.results_file, "a") as results:
-            results.write("Positive: " + str(count['1']) + ", Neutral: " + str(
-                count['0']) + ", Negative: " + str(count['-1']) + ", Total: " + str(sum(count.values())) + "\n")
+        if FLAGS.neutral_sentiment == 1:
+            with open(FLAGS.results_file, "a") as results:
+                results.write("Positive: " + str(count['1']) + ", Neutral: " + str(
+                    count['0']) + ", Negative: " + str(count['-1']) + ", Total: " + str(sum(count.values())) + "\n")
+        else:
+            if FLAGS.neutral_to_negative == 1:
+                with open(FLAGS.results_file, "a") as results:
+                    results.write("Positive: " + str(count['1']) + ", Negative: " + str(count['-1'] + count['0']) + ", Total: " + str(sum(count.values())) + "\n")
+            else:
+                with open(FLAGS.results_file, "a") as results:
+                    results.write("Positive: " + str(count['1'] + count['0']) + ", Negative: " + str(count['-1']) + ", Total: " + str(sum(count.values())) + "\n")
     print("Polarity count:", count)
     if pos_neu_neg:
-        class_set = {'1', '0', '-1'}
+        if FLAGS.neutral_sentiment == 1:
+            class_set = {'1', '0', '-1'}
+        else:
+            class_set = {'1', '-1'}
     else:
         class_set = set(y)
     n_class = len(class_set)
@@ -139,12 +150,23 @@ def change_y_to_onehot_keep(y, y_onehot_mapping, pos_neu_neg=True):
     from collections import Counter
     count = Counter(y)
     if FLAGS.writable == 1:
-        with open(FLAGS.results_file, "a") as results:
-            results.write("Positive: " + str(count['1']) + ", Neutral: " + str(
-                count['0']) + ", Negative: " + str(count['-1']) + ", Total: " + str(sum(count.values())) + "\n")
+        if FLAGS.neutral_sentiment == 1:
+            with open(FLAGS.results_file, "a") as results:
+                results.write("Positive: " + str(count['1']) + ", Neutral: " + str(
+                    count['0']) + ", Negative: " + str(count['-1']) + ", Total: " + str(sum(count.values())) + "\n")
+        else:
+            if FLAGS.neutral_to_negative == 1:
+                with open(FLAGS.results_file, "a") as results:
+                    results.write("Positive: " + str(count['1']) + ", Negative: " + str(count['-1'] + count['0']) + ", Total: " + str(sum(count.values())) + "\n")
+            else:
+                with open(FLAGS.results_file, "a") as results:
+                    results.write("Positive: " + str(count['1'] + count['0']) + ", Negative: " + str(count['-1']) + ", Total: " + str(sum(count.values())) + "\n")
     print("Polarity count:", count)
     if pos_neu_neg:
-        class_set = {'1', '0', '-1'}
+        if FLAGS.neutral_sentiment == 1:
+            class_set = {'1', '0', '-1'}
+        else:
+            class_set = {'1', '-1'}
     else:
         class_set = set(y)
     n_class = len(class_set)
@@ -232,6 +254,13 @@ def load_inputs_twitter(input_file, word_id_file, sentence_len, type_='', is_r=T
             words = words[:sentence_len]
             sen_len.append(len(words))
             x.append(words + [0] * (sentence_len - len(words)))
+    if FLAGS.neutral_sentiment == 0:
+        for l, label in enumerate(y):
+            if label == '0':
+                if FLAGS.neutral_to_negative == 1:
+                    y[l] = '-1'
+                else:
+                    y[l] = '1'
     all_y = y
     y, y_onehot_mapping = change_y_to_onehot(y, pos_neu_neg=pos_neu_neg)
     if type_ == 'TD':
@@ -325,6 +354,13 @@ def load_inputs_twitter_keep(input_file, y_onehot_mapping, word_id_file, sentenc
             words = words[:sentence_len]
             sen_len.append(len(words))
             x.append(words + [0] * (sentence_len - len(words)))
+    if FLAGS.neutral_sentiment == 0:
+        for l, label in enumerate(y):
+            if label == '0':
+                if FLAGS.neutral_to_negative == 1:
+                    y[l] = '-1'
+                else:
+                    y[l] = '1'
     all_y = y
     y, y_onehot_mapping = change_y_to_onehot_keep(y, y_onehot_mapping, pos_neu_neg=pos_neu_neg)
     if type_ == 'TD':
@@ -432,7 +468,13 @@ def load_inputs_cabasc(input_file, word_id_file, sentence_len, type_='', is_r=Tr
                     sent_final,
                     mult_mask
                 ))
-
+    if FLAGS.neutral_sentiment == 0:
+        for l, label in enumerate(y):
+            if label == '0':
+                if FLAGS.neutral_to_negative == 1:
+                    y[l] = '-1'
+                else:
+                    y[l] = '1'
     y, _ = change_y_to_onehot(y)
     if type_ == 'TD':
         return np.asarray(x), np.asarray(sen_len), np.asarray(x_r), \

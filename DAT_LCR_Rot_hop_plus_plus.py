@@ -14,13 +14,12 @@
 import os
 
 import numpy as np
-import random
 from sklearn.metrics import precision_score, recall_score, f1_score
 
 from att_layer import bilinear_attention_layer, dot_produce_attention_layer
 from config import *
 from nn_layer import class_discriminator, domain_discriminator, bi_dynamic_rnn, reduce_mean_with_len
-from utils import load_w2v, batch_index, load_inputs_twitter_keep, load_inputs_twitter
+from utils import load_w2v, batch_index, load_inputs_twitter
 
 sys.path.append(os.getcwd())
 tf.set_random_seed(1)
@@ -214,23 +213,21 @@ def main(train_path_source, train_path_target, test_path, learning_rate_dis=0.01
         with tf.variable_scope("lcr_rot", reuse=tf.AUTO_REUSE) as scope:
             outputs_fin_source, alpha_fw_source, alpha_bw_source, alpha_t_l_source, alpha_t_r_source = lcr_rot(
                 inputs_fw_source, inputs_bw_source, sen_len_src, sen_len_bw_src,
-                target_source, tar_len_src, keep_prob_all, l2_f, 'source', 'all')
+                target_source, tar_len_src, keep_prob_all, l2_f, 'all')
         with tf.variable_scope("lcr_rot", reuse=tf.AUTO_REUSE) as scope:
             outputs_fin_target, alpha_fw_target, alpha_bw_target, alpha_t_l_target, alpha_t_r_target = lcr_rot(
                 inputs_fw_target, inputs_bw_target, sen_len_tar, sen_len_bw_tar,
-                target_target, tar_len_tar, keep_prob_all, l2_f, 'target', 'all')
+                target_target, tar_len_tar, keep_prob_all, l2_f, 'all')
 
         # Pass both domains through the domain discriminator and compute its combined loss
         with tf.variable_scope("dis",
                                reuse=tf.AUTO_REUSE) as scope:
-            prob_domain_source, w0, w1 = domain_discriminator(outputs_fin_source, 8 * FLAGS.n_hidden, keep_prob_all,
-                                                              l2_dis, FLAGS.n_domain)
-            prob_domain_target, w0, w1 = domain_discriminator(outputs_fin_target, 8 * FLAGS.n_hidden, keep_prob_all,
-                                                              l2_dis, FLAGS.n_domain)
+            prob_domain_source, weights = domain_discriminator(outputs_fin_source, keep_prob_all, l2_dis, '1', False)
+            prob_domain_target, weights = domain_discriminator(outputs_fin_target, keep_prob_all, l2_dis, '1', False)
 
         # Only add the l2-regularisation term once for the weights.
-        loss_domain_source = loss_func_domain_discr(d_src, prob_domain_source, w0, w1, True)
-        loss_domain_target = loss_func_domain_discr(d_tar, prob_domain_target, w0, w1, False)
+        loss_domain_source = loss_func_domain_discr(d_src, prob_domain_source, weights, True)
+        loss_domain_target = loss_func_domain_discr(d_tar, prob_domain_target, weights, False)
         acc_num_domain_source, acc_prob_domain_source = acc_func(d_src, prob_domain_source)
         acc_num_domain_target, acc_prob_domain_target = acc_func(d_tar, prob_domain_target)
         loss_domain = loss_domain_target + loss_domain_source
@@ -238,12 +235,12 @@ def main(train_path_source, train_path_target, test_path, learning_rate_dis=0.01
 
         # Pass only the source domain through the class discriminator and calculate its loss
         with tf.variable_scope("class", reuse=tf.AUTO_REUSE) as scope:
-            prob_class = class_discriminator(outputs_fin_source, 8 * FLAGS.n_hidden, keep_prob_all, l2_f, FLAGS.n_class)
-        loss_class = loss_func_class_discr(y_src, prob_class)
+            prob_class, weights = class_discriminator(outputs_fin_source, keep_prob_all, l2_f, '1', False)
+        loss_class = loss_func_class_discr(y_src, prob_class, weights)
         acc_num_class, acc_prob_class = acc_func(y_src, prob_class)
 
         # Define total loss of CLRH++ model
-        loss_f = loss_class - balance_lambda * loss_domain
+        loss_f = loss_class - balance_lambda * loss_domain + 0.0001
 
         # Set step variable and obtain the different variable lists to be used for the training
         global_step = tf.Variable(0, name='tr_global_step', trainable=False)
@@ -263,10 +260,10 @@ def main(train_path_source, train_path_target, test_path, learning_rate_dis=0.01
         with tf.variable_scope("lcr_rot", reuse=True) as scope:
             outputs_fin_test, alpha_fw_test, alpha_bw_test, alpha_t_l_test, alpha_t_r_test = lcr_rot(
                 inputs_fw_test, inputs_bw_test, sen_len_te, sen_len_bw_te,
-                target_test, tar_len_te, keep_prob_all, l2_f, 'target', 'all')
+                target_test, tar_len_te, keep_prob_all, l2_f, 'all')
         with tf.variable_scope("class", reuse=True) as scope:
-            prob_class_test = class_discriminator(outputs_fin_test, 8 * FLAGS.n_hidden, keep_prob_all, l2_f, FLAGS.n_class)
-        loss_class_test = loss_func_class_discr(y_te, prob_class_test)
+            prob_class_test, weights = class_discriminator(outputs_fin_test, keep_prob_all, l2_f, '1', True)
+        loss_class_test = loss_func_class_discr(y_te, prob_class_test, weights)
         acc_num_class_test, acc_prob_class_test = acc_func(y_te, prob_class_test)
         # Define the predicted label and real label
         pred_y = tf.argmax(prob_class_test, 1)
@@ -328,37 +325,6 @@ def main(train_path_source, train_path_target, test_path, learning_rate_dis=0.01
             """
             Obtains the batches for each iteration of the CLRH method. All parameters with name_scope('inputs') should
             be defined here.
-
-            :param x_f_src:
-            :param x_f_tar:
-            :param x_f_te:
-            :param sen_len_f_src:
-            :param sen_len_f_tar:
-            :param sen_len_f_te:
-            :param x_b_src:
-            :param x_b_tar:
-            :param x_b_te:
-            :param sen_len_b_src:
-            :param sen_len_b_tar:
-            :param sen_len_b_te:
-            :param yi_src:
-            :param yi_tar:
-            :param yi_te:
-            :param batch_target_src:
-            :param batch_target_tar:
-            :param batch_tl_src:
-            :param batch_target_te:
-            :param batch_tl_tar:
-            :param batch_tl_te:
-            :param batch_size_src:
-            :param batch_size_tar:
-            :param batch_size_te:
-            :param keep_pr:
-            :param domain_src:
-            :param domain_tar:
-            :param run_test: True if testing
-            :param is_shuffle: True if the trainings sets must be shuffled
-            :return:
             """
             for index_src, index_tar, index_te in batch_index(len(yi_src), len(yi_tar), len(yi_te), batch_size_src,
                                                               batch_size_tar, batch_size_te, is_shuffle, run_test):
@@ -478,6 +444,8 @@ def main(train_path_source, train_path_target, test_path, learning_rate_dis=0.01
                                                                                                                      acc))
             if acc > max_acc:
                 max_acc = acc
+            if np.isnan(cost):
+                break
         if FLAGS.writable == 1:
             with open(FLAGS.results_file, "a") as results:
                 results.write(
@@ -508,7 +476,7 @@ def main(train_path_source, train_path_target, test_path, learning_rate_dis=0.01
             for y1, y2, ws in zip(ty, py, tr):
                 fp.write(str(y1) + ' ' + str(y2) + ' ' + ' '.join([str(w) for w in ws[0]]) + '\n')
 
-        print('Optimization Finished! Test accuracy={}\n'.format(max_acc))
+        print('Optimization Finished! Test accuracy={}\n'.format(acc) + ', max accuracy ' + str(max_acc))
 
         # Save model if savable.
         if FLAGS.savable == 1:
@@ -518,39 +486,53 @@ def main(train_path_source, train_path_target, test_path, learning_rate_dis=0.01
 
         # Record accuracy by polarity.
         FLAGS.pos = y_onehot_mapping_te['1']
-        FLAGS.neu = y_onehot_mapping_te['0']
+        if FLAGS.neutral_sentiment == 1:
+            FLAGS.neu = y_onehot_mapping_te['0']
+            neu_count = 0
+            neu_correct = 0
         FLAGS.neg = y_onehot_mapping_te['-1']
         pos_count = 0
         neg_count = 0
-        neu_count = 0
         pos_correct = 0
         neg_correct = 0
-        neu_correct = 0
         for i in range(0, len(ty)):
-            if ty[i] == FLAGS.pos:
-                # Positive sentiment.
-                pos_count += 1
-                if py[i] == FLAGS.pos:
-                    pos_correct += 1
-            elif ty[i] == FLAGS.neu:
-                # Neutral sentiment.
-                neu_count += 1
-                if py[i] == FLAGS.neu:
-                    neu_correct += 1
+            if FLAGS.neutral_sentiment == 1:
+                if ty[i] == FLAGS.pos:
+                    # Positive sentiment.
+                    pos_count += 1
+                    if py[i] == FLAGS.pos:
+                        pos_correct += 1
+                elif ty[i] == FLAGS.neu:
+                    # Neutral sentiment.
+                    neu_count += 1
+                    if py[i] == FLAGS.neu:
+                        neu_correct += 1
+                else:
+                    # Negative sentiment.
+                    neg_count += 1
+                    if py[i] == FLAGS.neg:
+                        neg_correct += 1
             else:
-                # Negative sentiment.
-                neg_count += 1
-                if py[i] == FLAGS.neg:
-                    neg_correct += 1
+                if ty[i] == FLAGS.pos:
+                    # Positive sentiment.
+                    pos_count += 1
+                    if py[i] == FLAGS.pos:
+                        pos_correct += 1
+                else:
+                    # Negative sentiment.
+                    neg_count += 1
+                    if py[i] == FLAGS.neg:
+                        neg_correct += 1
         if FLAGS.writable == 1:
             with open(FLAGS.results_file, "a") as results:
                 results.write("Test results.\n")
                 results.write(
                     "Positive. Correct: {}, Incorrect: {}, Total: {}\n".format(pos_correct, pos_count - pos_correct,
                                                                                pos_count))
-                results.write(
-                    "Neutral. Correct: {}, Incorrect: {}, Total: {}\n".format(neu_correct, neu_count - neu_correct,
-                                                                              neu_count))
+                if FLAGS.neutral_sentiment == 1:
+                    results.write(
+                        "Neutral. Correct: {}, Incorrect: {}, Total: {}\n".format(neu_correct, neu_count - neu_correct,
+                                                                                neu_count))
                 results.write(
                     "Negative. Correct: {}, Incorrect: {}, Total: {}\n---\n".format(neg_correct,
                                                                                     neg_count - neg_correct,

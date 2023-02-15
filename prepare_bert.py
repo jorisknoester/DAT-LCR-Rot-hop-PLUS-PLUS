@@ -24,6 +24,7 @@ path = "data/programGeneratedData/BERT/" + domain + "/"
 temp_path = "data/programGeneratedData/BERT/"
 split = False
 
+
 temp_filenames_base = ["data/externalData/" + "BERT_base_" + domain + "_" + str(year) + ".txt"]
 
 FLAGS.source_domain = domain
@@ -31,29 +32,29 @@ FLAGS.target_domain = domain
 FLAGS.source_year = year
 
 count_sentences = 0
-with open(temp_path + "temp/BERT_base_" + str(FLAGS.source_year) + "embedding.txt", 'w') as outf:
+with open(temp_path + "temp/BERT_base_" + str(FLAGS.source_year) + "embedding.txt", 'w', encoding='utf-8') as outf:
     for tfname in temp_filenames_base:
         print(tfname)
-        with open(tfname) as infile:
+        with open(tfname, 'r', encoding='utf-8') as infile:
             for line in infile:
                 if line.startswith("\n") or line.startswith("[CLS]") or line.startswith("[SEP]"):
                     pass
                 else:
                     outf.write(line)
                     count_sentences += 1
-print("Sentences: " + str(count_sentences))
+print("First sentences: " + str(count_sentences))
 count_sentences = 0
 with open(temp_path + "temp/BERT_base_" + str(FLAGS.source_year) + "embedding_withCLS_SEP.txt", 'w') as outf:
     for tfname in temp_filenames_base:
         print(tfname)
-        with open(tfname) as infile:
+        with open(tfname, 'r', encoding='utf-8') as infile:
             for line in infile:
                 if line.startswith("\n"):
                     pass
                 else:
                     outf.write(line)
                     count_sentences += 1
-print("Sentences: " + str(count_sentences))
+print("Second sentences: " + str(count_sentences))
 # </editor-fold>
 
 # <editor-fold desc="make table with unique words">
@@ -63,12 +64,12 @@ unique_words = []
 unique_words_index = []
 with open(temp_path + "temp/BERT_base_" + str(FLAGS.source_year) + "embedding_withCLS_SEP.txt") as BERTemb_sep:
     for line in BERTemb_sep:
-        word = line.split(" ")[0]
-        if word == "[CLS]":
+        word = line.split("_")[0]
+        if "[CLS]" in word:
             pass
         else:
             vocaBERT_SEP.append(word)
-            if word == "[SEP]":
+            if "[SEP]" in word:
                 pass
             else:
                 if word not in unique_words:
@@ -82,16 +83,19 @@ print("vocaBERT_SEP: " + str(len(vocaBERT_SEP)))
 # <editor-fold desc="make embedding matrix with unique words, prints counter">
 counter = 0
 uniqueVocaBERT = []
-with open(temp_path + "temp/BERT_base_" + str(FLAGS.source_year) + "embedding.txt") as BERTemb:
+with open(temp_path + "temp/BERT_base_" + str(FLAGS.source_year) + "embedding.txt", 'r', encoding='utf-8') as BERTemb:
     with open("data/programGeneratedData/" + str(FLAGS.embedding_type) + '_' + domain + "_"
               + str(FLAGS.source_year) + '_' + str(FLAGS.embedding_dim) + '.txt', 'w') as outfile:
         for line in BERTemb:
-            word = line.split(" ")[0]
+            word = line.split("_")[0]
             counter += 1
             weights = line.split(" ")[1:]
-            index = unique_words.index(word)  # Get index in unique words table.
-            word_count = unique_words_index[index]
-            unique_words_index[index] += 1
+            try:
+                index = unique_words.index(word)  # Get index in unique words table.
+                word_count = unique_words_index[index]
+                unique_words_index[index] += 1
+            except:
+                print(word)
             item = str(word) + '_' + str(word_count)
             outfile.write("%s " % item)
             uniqueVocaBERT.append(item)
@@ -133,7 +137,10 @@ for i in range(0, len(lines), 3):
     target_raw.append(lines[i + 1].lower().split())
     sentiment.append(lines[i + 2])
 for i in range(0, len(vocaBERT_SEP)):
-    sentence_target = target_raw[sentenceCount]
+    try:
+        sentence_target = target_raw[sentenceCount]
+    except:
+        print(i, sentenceCount, vocaBERT_SEP[i])
     sentence_target_str = ''.join(sentence_target)
     x_word.append(i)
     word = vocaBERT_SEP[i]
@@ -162,7 +169,7 @@ for filenr in range(1, 8):
     sentence_target_unique = ""
     sentCount = 0
     dollarcount = 0
-    with open(temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_" + str(filenr) + '.txt', 'w') as outFile:
+    with open(temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_" + str(filenr) + '.txt', 'w',  encoding='utf-8') as outFile:
         for u in range(0, len(uniqueVocaBERT_SEP)):
             if uniqueVocaBERT_SEP[u] == "[SEP]":
                 outFile.write(sentence_senten_unique + '\n')
@@ -197,7 +204,10 @@ for filenr in range(1, 8):
         target_raw.append(lines[i + 1].lower().split())
         sentiment.append(lines[i + 2])
     for i in range(0, len(vocaBERT_SEP)):
-        sentence_target = target_raw[sentenceCount]
+        try:
+            sentence_target = target_raw[sentenceCount]
+        except:
+            print(i, sentenceCount, vocaBERT_SEP[i])
         sentence_target_str = ''.join(sentence_target)
         x_word.append(i)
         word = vocaBERT_SEP[i]
@@ -223,17 +233,17 @@ for filenr in range(1, 8):
 # Different files for different extra target lengths, e.g. file 2 contains target phrases that are 1 word longer in the
 # BERT embedding than the original target phrase
 lines_1 = open(temp_path + "temp/" + "unique" + str(
-    FLAGS.source_year) + "_BERT_Data_1.txt").readlines()
+    FLAGS.source_year) + "_BERT_Data_1.txt",  'r', encoding='utf-8').readlines()
 lines_2 = open(temp_path + "temp/" + "unique" + str(
-    FLAGS.source_year) + "_BERT_Data_2.txt").readlines()
+    FLAGS.source_year) + "_BERT_Data_2.txt",  'r', encoding='utf-8').readlines()
 lines_3 = open(
-    temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_3.txt").readlines()
+    temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_3.txt",  'r', encoding='utf-8').readlines()
 lines_4 = open(temp_path + "temp/" + "unique" + str(
-    FLAGS.source_year) + "_BERT_Data_4.txt").readlines()
-lines_5 = open(temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_5.txt").readlines()
-lines_6 = open(temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_6.txt").readlines()
-lines_7 = open(temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_7.txt").readlines()
-with open(temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_All.txt", 'w') as outF:
+    FLAGS.source_year) + "_BERT_Data_4.txt",  'r', encoding='utf-8').readlines()
+lines_5 = open(temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_5.txt",  'r', encoding='utf-8').readlines()
+lines_6 = open(temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_6.txt",  'r', encoding='utf-8').readlines()
+lines_7 = open(temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_7.txt",  'r', encoding='utf-8').readlines()
+with open(temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_All.txt", 'w',  encoding='utf-8') as outF:
     for i in range(0, len(lines_1), 3):
         if lines_1[i + 1] == '\n':
             if lines_2[i + 1] == '\n':
@@ -267,7 +277,7 @@ with open(temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_
 
 # <editor-fold desc="Split in train and test file">
 
-linesAllData = open(temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_All.txt").readlines()
+linesAllData = open(temp_path + "temp/" + "unique" + str(FLAGS.source_year) + "_BERT_Data_All.txt",  'r', encoding='utf-8').readlines()
 
 if split:
     # Split datasets.
